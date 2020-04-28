@@ -5,6 +5,7 @@
 import json
 import dateutil.parser
 import babel
+import sys
 from flask import Flask, render_template, request, Response, flash, redirect, url_for
 from flask_moment import Moment
 from flask_sqlalchemy import SQLAlchemy
@@ -44,11 +45,14 @@ class Venue(db.Model):
     phone = db.Column(db.String(120))
     image_link = db.Column(db.String(500))
     facebook_link = db.Column(db.String(120))
-    genre = db.Column(db.String(50))
+    genres = db.Column(db.String(120))
 
     shows = db.relationship('Show', backref='venue', lazy=True)
 
     # TODO: implement any missing fields, as a database migration using Flask-Migrate
+
+    def __repr__(self):
+      return f"Venue id:{self.id}, name:{self.name}"
 
 class Artist(db.Model):
     __tablename__ = 'Artist'
@@ -61,11 +65,13 @@ class Artist(db.Model):
     genres = db.Column(db.String(120))
     image_link = db.Column(db.String(500))
     facebook_link = db.Column(db.String(120))
-    genre = db.Column(db.String(50))
 
     shows = db.relationship('Show', backref='artist', lazy=True)
 
     # TODO: implement any missing fields, as a database migration using Flask-Migrate
+
+    def __repr__(self):
+      return f"Artist id:{self.id}, name:{self.name}"
 
 # TODO Implement Show and Artist models, and complete all model relationships and properties, as a database migration.
 
@@ -76,6 +82,9 @@ class Show(db.Model):
   start_time = db.Column(db.DateTime)
   venue_id = db.Column(db.Integer, db.ForeignKey('Venue.id'), nullable=False)
   artist_id = db.Column(db.Integer, db.ForeignKey('Artist.id'), nullable=False)
+
+  def __repr__(self):
+      return f"Show id:{self.id}, name:{self.start_time}"
 
 #----------------------------------------------------------------------------#
 # Filters.
@@ -241,11 +250,32 @@ def create_venue_form():
 def create_venue_submission():
   # TODO: insert form data as a new Venue record in the db, instead
   # TODO: modify data to be the data object returned from db insertion
+  error = False
+  try:
+    data = request.form.to_dict(flat=False)
+    venue = Venue(name=data.get('name'))
+    venue.city = data.get('name')
+    venue.state=data.get('state')
+    venue.phone=data.get('phone')
+    venue.image_link=data.get('image_link')
+    venue.facebook_link=data.get('facebook_link')
+    venue.genres=','.join(data.get('genres')) if isinstance(data.get('genres'), list) else data.get('genres')
+    db.session.add(venue)
+    db.session.commit()
+  except:
+    error = True
+    db.session.rollback()
+    print(sys.exc_info())
+  finally:
+    db.session.close()
+  if not error:
+    # on successful db insert, flash success
+    flash('Venue ' + request.form['name'] + ' was successfully listed!')
+  else:
+    flash('An error occurred. Venue ' + request.form['name'] + ' could not be listed.')
 
-  # on successful db insert, flash success
-  flash('Venue ' + request.form['name'] + ' was successfully listed!')
   # TODO: on unsuccessful db insert, flash an error instead.
-  # e.g., flash('An error occurred. Venue ' + data.name + ' could not be listed.')
+  # e.g., 
   # see: http://flask.pocoo.org/docs/1.0/patterns/flashing/
   return render_template('pages/home.html')
 
