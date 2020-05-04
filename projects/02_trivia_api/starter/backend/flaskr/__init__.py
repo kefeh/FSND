@@ -1,6 +1,7 @@
 import os
 from flask import Flask, request, abort, jsonify
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import func
 from flask_cors import CORS
 import random
 
@@ -55,17 +56,31 @@ def create_app(test_config=None):
   ten questions per page and pagination at the bottom of the screen for three pages.
   Clicking on the page numbers should update the questions. 
   '''
-  def question_get_return(page, category_id=None):
+  def question_get_return(page, category_id=None, search_term=None):
+    """
+    Generic question search and formatter, that always return the first page of the results if no page number is specified
+    """
     num_quest = 10
     if category_id:
+      # here we are handling the case where we need questions on a particular category
       questions = Question.query.filter(Question.category==category_id).paginate(max_per_page=num_quest, page=page)
+      category = Category.query.get(category_id)
+      category_type = category.type
+    elif search_term:
+      # Here we are handling the search for a question not case sensitive search if the term is a substring of the question
+      questions = Question.query.filter(func.lower(Question.question).contains(search_term.lower())).paginate(max_per_page=num_quest, page=page)
+      category_type = ' '
     else:
       questions = Question.query.paginate(max_per_page=num_quest, page=page)
+      category_type = ' '
 
-    category = Category.query.get(category_id)
     questions = [dict(question.format()) for question in questions.items]
+    categories = Category.query.all()
+    category_result = {}
+    for category in categories:
+      category_result[category.id] = category.type 
 
-    result = {"questions": questions, "total_questions": len(questions), "current_category": category.type}
+    result = {"questions": questions, "total_questions": len(questions), "current_category": category_type, 'categories': category_result}
 
     return result
 
@@ -75,6 +90,9 @@ def create_app(test_config=None):
     page = request.args.get('page', 1, type=int)
 
     result = question_get_return(page)
+
+    if len(result) == 0:
+      abort(400)
 
     return jsonify(result)
 
@@ -120,6 +138,12 @@ def create_app(test_config=None):
   only question that include that string within their question. 
   Try using the word "title" to start. 
   '''
+  @app.route('/questions/search', methods=['POST'])
+  def search_question():
+    search_term = request.json.get('searchTerm', '')
+    result = question_get_return(1, search_term=search_term)
+
+    return jsonify(result)
 
   '''
   @TODO: 
@@ -146,6 +170,16 @@ def create_app(test_config=None):
   one question at a time is displayed, the user is allowed to answer
   and shown whether they were correct or not. 
   '''
+  @app.route('/quizzes', methods=['POST'])
+  def quizes():
+    data = request.json
+    previous_questions_list = data.get('previous_questions')
+    quiz_category = data.get('quiz_category')
+    question = Question.query.filter(Question.category==quiz_category.get('id')).filter(Question.id.notin_(previous_questions_list)).order_by(func.random()).limit(1).all()
+
+    if question:
+      question = dict(question[0].format())
+    return jsonify({'question': question})
 
   '''
   @TODO: 
