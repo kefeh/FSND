@@ -107,7 +107,12 @@ def create_app(test_config=None):
   @app.route('/questions/<int:question_id>', methods=['DELETE'])
   def delete_question(question_id):
     question = Question.query.get(question_id)
-    question.delete()
+    if not question:
+      abort(405)
+    try:
+      question.delete()
+    except Exception:
+      abort(500)
     return jsonify({'message': "Delete Successful"})
 
   '''
@@ -123,8 +128,13 @@ def create_app(test_config=None):
   @app.route('/questions', methods=['POST'])
   def add_question():
     data = request.json
-    question = Question(question=data.get('question', ''), answer=data.get('answer'), category=data.get('category'), difficulty=data.get('difficulty'))
-    question.insert()
+    if (data.get('question') == '') or (data.get('answer') or data.get('category') or data.get('difficulty')):
+      abort(422)
+    try:
+      question = Question(question=data.get('question', ''), answer=data.get('answer'), category=data.get('category'), difficulty=data.get('difficulty'))
+      question.insert()
+    except Exception:
+      abort(422)
 
     return jsonify({'message': 'success'})
 
@@ -140,8 +150,11 @@ def create_app(test_config=None):
   '''
   @app.route('/questions/search', methods=['POST'])
   def search_question():
-    search_term = request.json.get('searchTerm', '')
-    result = question_get_return(1, search_term=search_term)
+    try:
+      search_term = request.json.get('searchTerm', '')
+      result = question_get_return(1, search_term=search_term)
+    except Exception:
+      abort(422)
 
     return jsonify(result)
 
@@ -156,6 +169,8 @@ def create_app(test_config=None):
   @app.route("/categories/<int:category_id>/questions", methods=['GET'])
   def get_question_per_category(category_id):
     result = question_get_return(1, category_id=category_id)
+    if not result:
+      abort(405)
 
     return jsonify(result)
 
@@ -175,6 +190,9 @@ def create_app(test_config=None):
     data = request.json
     previous_questions_list = data.get('previous_questions')
     quiz_category = data.get('quiz_category')
+    if not previous_questions_list or not quiz_category:
+      abort(422)
+
     question = Question.query.filter(Question.category==quiz_category.get('id')).filter(Question.id.notin_(previous_questions_list)).order_by(func.random()).limit(1).all()
 
     if question:
@@ -186,6 +204,40 @@ def create_app(test_config=None):
   Create error handlers for all expected errors 
   including 404 and 422. 
   '''
+  @app.errorhandler(404)
+  def not_found(error):
+    return jsonify({
+      'error': 404,
+      'message': 'Not Found'
+    }), 404
+
+  @app.errorhandler(422)
+  def unprocessable(error):
+    return jsonify({
+      'error': 422,
+      'message': 'Unprocessable'
+    }), 422
+
+  @app.errorhandler(400)
+  def bad_request(error):
+    return jsonify({
+      'error': 400,
+      'message': 'Bad Request'
+    }), 400
+
+  @app.errorhandler(405)
+  def not_found(error):
+    return jsonify({
+      'error': 405,
+      'message': 'Not Found'
+    }), 405
+
+  @app.errorhandler(500)
+  def sever_error(error):
+    return jsonify({
+      'error': 500,
+      'message': 'Sever Error'
+    }), 500
   
   return app
 
